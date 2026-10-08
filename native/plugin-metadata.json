@@ -1,0 +1,11 @@
+{
+  "name": "antiwallhack",
+  "alias": "antiwallhack",
+  "display_name": "AntiWallHack",
+  "description": "Server-side enemy visibility filtering for CS2",
+  "author": "M1K@c",
+  "url": "",
+  "log_tag": "AntiWallHack",
+  "license": "AGPL-3.0",
+  "version": "1.0.0"
+}

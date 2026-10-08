@@ -1,0 +1,10 @@
+{
+  "windows": {
+    "GameEntitySystem": 88,
+    "TraceShape": "48 89 54 24 ? 48 89 4C 24 ? 55 53 56 57 41 54 41 56 41 57"
+  },
+  "linux": {
+    "GameEntitySystem": 80,
+    "TraceShape": "55 48 8D 05 ? ? ? ? 48 89 E5 41 57 49 89 F7 41 56 48 8D 35 ? ? ? ? 49 89 CE"
+  }
+}
