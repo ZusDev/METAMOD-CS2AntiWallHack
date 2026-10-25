@@ -9,6 +9,7 @@
 #include <fstream>
 #include <thread>
 #include <vector>
+#include <dlfcn.h>
 #include <spawn.h>
 #include <sys/wait.h>
 #include <sys/file.h>
@@ -124,7 +125,7 @@ namespace awh::updates
 
         if ( error )
         {
-            throw std::runtime_error( "Cannot start update helper, install curl, unzip and sha256sum" );
+            throw std::runtime_error( "Cannot start update helper, install curl and sha256sum" );
         }
 
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds( 75 );
@@ -177,6 +178,125 @@ namespace awh::updates
         }
 
         return std::string( std::istreambuf_iterator<char>( input ), {} );
+    }
+
+    // unzip is missing on a lot of hosts, so read the zip here and inflate it with the libz.so.1 CS2 already loads
+    struct ZipEntry
+    {
+        std::string name;
+        uint32_t method, crc, packed, size, offset;
+    };
+
+    static uint32_t ZipRead( const std::string& zip, size_t position, int bytes )
+    {
+        if ( position + bytes > zip.size() )
+        {
+            throw std::runtime_error( "Release archive is corrupt" );
+        }
+
+        uint32_t value = 0;
+
+        while ( bytes-- )
+        {
+            value = value << 8 | uint8_t( zip[position + bytes] );
+        }
+
+        return value;
+    }
+
+    static std::vector<ZipEntry> ZipEntries( const std::string& zip )
+    {
+        const size_t end = zip.rfind( "PK\5\6" );
+
+        if ( end == std::string::npos )
+        {
+            throw std::runtime_error( "Release archive is corrupt" );
+        }
+
+        std::vector<ZipEntry> entries;
+        size_t position = ZipRead( zip, end + 16, 4 );
+
+        for ( uint32_t count = ZipRead( zip, end + 10, 2 ); count > 0; --count )
+        {
+            const uint32_t length = ZipRead( zip, position + 28, 2 );
+
+            if ( ZipRead( zip, position, 4 ) != 0x02014b50 || position + 46 + length > zip.size() )
+            {
+                throw std::runtime_error( "Release archive is corrupt" );
+            }
+
+            entries.push_back( { zip.substr( position + 46, length ), ZipRead( zip, position + 10, 2 ), ZipRead( zip, position + 16, 4 ), ZipRead( zip, position + 20, 4 ),
+                                 ZipRead( zip, position + 24, 4 ), ZipRead( zip, position + 42, 4 ) } );
+            position += 46 + length + ZipRead( zip, position + 30, 2 ) + ZipRead( zip, position + 32, 2 );
+        }
+
+        return entries;
+    }
+
+    static void Unzip( const std::string& zip, const std::string& name, const fs::path& output, size_t limit )
+    {
+        // same layout as z_stream in zlib.h
+        struct Stream
+        {
+            const char* input;
+            unsigned inputSize;
+            unsigned long inputTotal;
+            char* output;
+            unsigned outputSize;
+            unsigned long outputTotal;
+            void* internal[8];
+        };
+
+        static void* zlib = dlopen( "libz.so.1", RTLD_NOW );
+        static auto inflateInit2 = reinterpret_cast<int ( * )( Stream*, int, const char*, int )>( zlib ? dlsym( zlib, "inflateInit2_" ) : nullptr );
+        static auto inflate = reinterpret_cast<int ( * )( Stream*, int )>( zlib ? dlsym( zlib, "inflate" ) : nullptr );
+        static auto inflateEnd = reinterpret_cast<int ( * )( Stream* )>( zlib ? dlsym( zlib, "inflateEnd" ) : nullptr );
+        static auto crc32 = reinterpret_cast<unsigned long ( * )( unsigned long, const char*, unsigned )>( zlib ? dlsym( zlib, "crc32" ) : nullptr );
+
+        if ( !inflateInit2 || !inflate || !inflateEnd || !crc32 )
+        {
+            throw std::runtime_error( "Cannot load libz.so.1 to extract the update" );
+        }
+
+        const auto entries = ZipEntries( zip );
+        const auto entry = std::find_if( entries.begin(), entries.end(),
+                                         [&]( const ZipEntry& value )
+                                         {
+                                             return value.name == name;
+                                         } );
+
+        if ( entry == entries.end() || entry->size > limit || ZipRead( zip, entry->offset, 4 ) != 0x04034b50 )
+        {
+            throw std::runtime_error( "Release archive entry is invalid: " + name );
+        }
+
+        const size_t start = entry->offset + 30 + ZipRead( zip, entry->offset + 26, 2 ) + ZipRead( zip, entry->offset + 28, 2 );
+        std::string text( entry->size, '\0' );
+        bool ok = start + entry->packed <= zip.size();
+
+        if ( ok && entry->method == 0 )
+        {
+            text = zip.substr( start, entry->packed );
+        }
+        else if ( ok && entry->method == 8 )
+        {
+            Stream stream{ zip.data() + start, entry->packed, 0, text.data(), entry->size, 0, {} };
+            ok = inflateInit2( &stream, -15, "1.2.11", sizeof( stream ) ) == 0 && inflate( &stream, 4 ) == 1;
+            inflateEnd( &stream );
+        }
+
+        if ( !ok || ( entry->method != 0 && entry->method != 8 ) || text.size() != entry->size || crc32( 0, text.data(), text.size() ) != entry->crc )
+        {
+            throw std::runtime_error( "Release archive entry is corrupt: " + name );
+        }
+
+        std::ofstream file( output, std::ios::binary | std::ios::trunc );
+        file.write( text.data(), text.size() );
+
+        if ( !file )
+        {
+            throw std::runtime_error( "Cannot write update staging file" );
+        }
     }
 
     static std::vector<std::string> Curl( const std::string& url, size_t limit )
@@ -266,10 +386,11 @@ namespace awh::updates
             const auto gamedata = staging.path / "gamedata.txt";
             const auto vdf = staging.path / "antiwallhack.vdf";
             const auto config = staging.path / "AntiWallHack.cfg";
-            Run( { "unzip", "-p", archive.string(), BinaryEntry }, binary, 32 * 1024 * 1024, cancel );
-            Run( { "unzip", "-p", archive.string(), GamedataEntry }, gamedata, 1024 * 1024, cancel );
-            Run( { "unzip", "-p", archive.string(), VdfEntry }, vdf, 65536, cancel );
-            Run( { "unzip", "-p", archive.string(), ConfigEntry }, config, 65536, cancel );
+            const auto releaseZip = ReadText( archive );
+            Unzip( releaseZip, BinaryEntry, binary, 32 * 1024 * 1024 );
+            Unzip( releaseZip, GamedataEntry, gamedata, 1024 * 1024 );
+            Unzip( releaseZip, VdfEntry, vdf, 65536 );
+            Unzip( releaseZip, ConfigEntry, config, 65536 );
             std::ifstream configInput( config );
             ParseConfig( configInput );
             ValidateBinary( binary );
@@ -286,20 +407,13 @@ namespace awh::updates
                 files.emplace_back( config, gamePath / ConfigEntry );
             }
 
-            const auto listing = staging.path / "map-entries.txt";
-            Run( { "unzip", "-Z1", mapsArchive.string() }, listing, 1024 * 1024, cancel );
-            std::istringstream entries( ReadText( listing ) );
-            std::string entry;
+            const auto mapsZip = ReadText( mapsArchive );
             std::set<std::string> mapNames;
             uint64_t totalBytes = 0;
 
-            while ( std::getline( entries, entry ) )
+            for ( const auto& file : ZipEntries( mapsZip ) )
             {
-                if ( !entry.empty() && entry.back() == '\r' )
-                {
-                    entry.pop_back();
-                }
-
+                const std::string& entry = file.name;
                 auto relative = MapEntry( entry );
 
                 if ( !relative )
@@ -313,7 +427,7 @@ namespace awh::updates
                 }
 
                 const auto stagedMap = staging.path / ( "map-" + std::to_string( mapNames.size() ) + ".awvis" );
-                Run( { "unzip", "-p", mapsArchive.string(), entry }, stagedMap, MapFileLimit, cancel );
+                Unzip( mapsZip, entry, stagedMap, MapFileLimit );
                 totalBytes += fs::file_size( stagedMap );
 
                 if ( totalBytes > MapsTotalLimit )
