@@ -471,7 +471,7 @@ namespace awh::updates
 
                 if ( existed[index] )
                 {
-                    fs::copy_file( destination, destination.string() + ".previous", fs::copy_options::overwrite_existing );
+                    fs::copy_file( destination, staging.path / ( "backup-" + std::to_string( index ) ) );
                     fs::permissions( files[index].first, fs::status( destination ).permissions() );
                 }
             }
@@ -493,7 +493,7 @@ namespace awh::updates
 
                     if ( existed[installed] )
                     {
-                        fs::rename( destination.string() + ".previous", destination );
+                        fs::rename( staging.path / ( "backup-" + std::to_string( installed ) ), destination );
                     }
                     else
                     {
@@ -505,7 +505,7 @@ namespace awh::updates
             }
 
             return { true, "Installed release " + release->version + " and " + std::to_string( mapNames.size() ) +
-                               " VIS maps, restart the server to activate it. Previous files retained as .previous" };
+                               " VIS maps, restart the server to activate it." };
         }
         catch ( const fs::filesystem_error& )
         {
