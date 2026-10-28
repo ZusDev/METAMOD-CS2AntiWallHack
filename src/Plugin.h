@@ -14,7 +14,6 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
-#include <unordered_set>
 #include <vector>
 #include <future>
 #include <chrono>
@@ -31,6 +30,8 @@
 #include "Networking/TransmitInfo.h"
 #include "Helpers/Memory.h"
 #include "Helpers/ModuleAnchor.h"
+#include "Helpers/WorkerAffinity.h"
+#include "Helpers/AttachmentTraversal.h"
 #include "Helpers/Jsonc.h"
 #include "Config/Config.h"
 #include "Config/Gamedata.h"
@@ -143,7 +144,7 @@ class AntiWallHack final : public ISmmPlugin, public IMetamodListener
     void SetupSmoke( void* moduleAnchor, CSchemaSystemTypeScope* scope, const Json& platform );
     void CaptureSmoke();
     bool IsSmokeHidden( const Snapshot& viewer, const Snapshot& target, Vector eyeLead, int count, int first );
-    bool CollectChildren( void* node, Snapshot& snapshot, std::unordered_set<void*>& seen, int depth );
+    bool CollectChildren( void* node, Snapshot& snapshot, AttachmentTraversal& seen, int depth );
     bool RoundActive();
     void BeginFrame( int tick, float now );
     void FillSamples( const Snapshot& target, float padding, std::array<Vector, 12>& points );

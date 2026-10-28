@@ -22,12 +22,14 @@ void AntiWallHack::PollUpdates()
     auto cancel = updateCancel;
     const auto path = gamePath;
     const std::string current = GetVersion();
+    const int gameCpu = sched_getcpu();
 
     try
     {
         updatePending = std::async( std::launch::async,
-                                    [path, current, cancel]()
+                                    [this, path, current, cancel, gameCpu]()
                                     {
+                                        DebugStage( SetWorkerAffinity( gameCpu ) ? "Update worker: background CPU affinity enabled" : "Update worker: CPU affinity unchanged" );
                                         return updates::CheckAndInstall( path, current, cancel );
                                     } );
     }

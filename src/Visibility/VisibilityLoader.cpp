@@ -128,10 +128,12 @@ void AntiWallHack::UpdateVisibility()
         visLoadingGeneration = visGeneration;
         visCancel = std::make_shared<std::atomic<bool>>( false );
         auto cancelled = visCancel;
+        const int gameCpu = sched_getcpu();
         DebugStage( "VIS: launching validation worker" );
         visPending = std::async( std::launch::async,
-                                 [this, path, root, map, cancelled]
+                                 [this, path, root, map, cancelled, gameCpu]
                                  {
+                                     DebugStage( SetWorkerAffinity( gameCpu ) ? "VIS worker: background CPU affinity enabled" : "VIS worker: CPU affinity unchanged" );
                                      const auto tid = static_cast<id_t>( syscall( SYS_gettid ) );
                                      errno = 0;
                                      const int currentNice = getpriority( PRIO_PROCESS, tid );

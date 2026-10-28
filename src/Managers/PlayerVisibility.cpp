@@ -12,7 +12,7 @@ void AntiWallHack::Reset()
 
     for ( auto& p : players )
     {
-        p = Snapshot{};
+        p.Reset();
     }
 
     for ( auto& row : hidden )
@@ -21,11 +21,11 @@ void AntiWallHack::Reset()
     }
 }
 
-bool AntiWallHack::CollectChildren( void* node, Snapshot& snapshot, std::unordered_set<void*>& seen, int depth )
+bool AntiWallHack::CollectChildren( void* node, Snapshot& snapshot, AttachmentTraversal& seen, int depth )
 {
     while ( node )
     {
-        if ( depth > 16 || seen.size() >= 128 || !seen.insert( node ).second )
+        if ( depth > 16 || !seen.Insert( node ) )
         {
             return false;
         }
@@ -105,7 +105,7 @@ void AntiWallHack::BeginFrame( int tick, float now )
     for ( int slot = 0; slot < 64; ++slot )
     {
         auto& p = players[slot];
-        p = Snapshot{};
+        p.Reset();
         auto* controller = EntityAt( entitySystem, CEntityIndex( slot + 1 ) );
 
         if ( !controller || !IsClass( controller, "CCSPlayerController" ) )
@@ -207,7 +207,7 @@ void AntiWallHack::BeginFrame( int tick, float now )
         }
 
         p.entities.push_back( handle );
-        std::unordered_set<void*> seen;
+        AttachmentTraversal seen;
         p.complete = CollectChildren( Field<void*>( scene, offsets.child ), p, seen, 0 );
         auto* services = Field<void*>( pawn, offsets.weapons );
 

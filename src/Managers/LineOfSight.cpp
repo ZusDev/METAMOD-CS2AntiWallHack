@@ -51,7 +51,9 @@ void AntiWallHack::PrepareViewerPrediction( Snapshot& viewer )
         alignas( 16 ) CGameTrace result;
         Vector start = viewer.eye, end = start + wanted;
         ++traces;
+
         traceFunction( traceManager, ray, start, end, &filter, &result );
+
         viewer.eyeLead = wanted * CornerClipScale( distance, result.m_flFraction, result.m_bStartInSolid );
     }
 

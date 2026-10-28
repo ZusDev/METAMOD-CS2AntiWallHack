@@ -1,6 +1,7 @@
 #pragma once
 #include <array>
 #include <vector>
+#include <utility>
 #include "Helpers/Entities.h"
 
 namespace awh
@@ -22,6 +23,14 @@ namespace awh
         bool eyeLeadReady = false;
         int visPeekCell = -1;
         int health = 0, life = -1;
+
+        void Reset()
+        {
+            auto retained = std::move( entities );
+            retained.clear();
+            *this = Snapshot{};
+            entities = std::move( retained );
+        }
     };
 
     struct Identity
