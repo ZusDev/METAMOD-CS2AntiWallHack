@@ -10,6 +10,8 @@ ServerBinary           41724600 775764504
 ServerBinary           41726328 131044578
 ServerBinary           41726328 705576273
 ServerBinary           41804088 2260596490
+ServerBinary           41807640 4226228886
+ServerBinary           41619480 1129058573
 
 // CSmokeGrenadeProjectile and its embedded voxel storage.
 SmokeVolume            3736
