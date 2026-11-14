@@ -81,6 +81,15 @@ void AntiWallHack::BeginFrame( int tick, float now )
         return;
     }
 
+    const ConVarRefAbstract ffa( "mp_teammates_are_enemies" );
+    const bool includeTeammates = settings.FilterTeammates || ( ffa.IsValidRef() && ffa.GetBool() );
+
+    if ( includeTeammates != filterSameTeam )
+    {
+        Reset();
+        filterSameTeam = includeTeammates;
+    }
+
     if ( tick < frameTick )
     {
         Reset();
@@ -162,8 +171,7 @@ void AntiWallHack::BeginFrame( int tick, float now )
         p.maxs = Field<Vector>( collision, offsets.maxs );
         p.angles = Field<QAngle>( pawn, offsets.angles );
 
-        if ( !Finite( p.origin ) || !Finite( p.eye ) || !Finite( p.velocity ) || !Finite( p.mins ) || !Finite( p.maxs ) || !std::isfinite( p.angles.x ) ||
-             !std::isfinite( p.angles.y ) || !std::isfinite( p.angles.z ) || p.mins.x >= p.maxs.x || p.mins.y >= p.maxs.y || p.mins.z >= p.maxs.z )
+        if ( !Finite( p.origin ) || !Finite( p.eye ) || !Finite( p.velocity ) || !Finite( p.mins ) || !Finite( p.maxs ) || !std::isfinite( p.angles.x ) || !std::isfinite( p.angles.y ) || !std::isfinite( p.angles.z ) || p.mins.x >= p.maxs.x || p.mins.y >= p.maxs.y || p.mins.z >= p.maxs.z )
         {
             identities[slot] = {};
             continue;
@@ -190,8 +198,7 @@ void AntiWallHack::BeginFrame( int tick, float now )
         }
 
         // FL_FAKECLIENT and HLTV bypass, only filter the actual living pawn, not a possessed bot.
-        p.human = !( Field<uint32>( controller, offsets.flags ) & FL_FAKECLIENT ) && !Field<bool>( controller, offsets.hltv ) &&
-                  Field<CEntityHandle>( controller, offsets.currentPawn ) == handle;
+        p.human = !( Field<uint32>( controller, offsets.flags ) & FL_FAKECLIENT ) && !Field<bool>( controller, offsets.hltv ) && Field<CEntityHandle>( controller, offsets.currentPawn ) == handle;
         p.bot = ( Field<uint32>( controller, offsets.flags ) & FL_FAKECLIENT ) != 0;
         Identity identity{ p.controllerHandle, p.pawnHandle, team };
 
@@ -287,7 +294,7 @@ void AntiWallHack::EvaluateViewer( int slot, int tick )
     {
         int targetSlot = RotatedIndex( order, uint64_t( uint32_t( tick ) ) + slot, PlayerLimit );
 
-        if ( !Enemy( slot, targetSlot, identities ) )
+        if ( !CanFilterTarget( slot, targetSlot, identities, filterSameTeam ) )
         {
             continue;
         }
@@ -320,7 +327,7 @@ const std::vector<CEntityHandle>& AntiWallHack::GetHidden( int slot, int tick )
 
     for ( int targetSlot = 0; targetSlot < PlayerLimit; ++targetSlot )
     {
-        if ( !Enemy( slot, targetSlot, identities ) || !pairVisibility.Hidden( slot, targetSlot, tick, deadlines[slot][targetSlot] ) )
+        if ( !CanFilterTarget( slot, targetSlot, identities, filterSameTeam ) || !pairVisibility.Hidden( slot, targetSlot, tick, deadlines[slot][targetSlot] ) )
         {
             continue;
         }

@@ -69,8 +69,9 @@ namespace awh
     struct Settings
     {
         bool Enabled = true, SmokeOcclusion = true, Debug = false, AutoUpdate = true;
+        bool FilterTeammates = false;
         int VisibleGraceTicks = 20;
-        float BoundsPadding = 28;
+        float BoundsPadding = 32;
         bool CornerPrediction = true;
         float CornerPredictionSeconds = .1f, CornerMaxDistance = 32;
 

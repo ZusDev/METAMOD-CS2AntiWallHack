@@ -6,10 +6,11 @@ namespace awh
 
 Enabled                      1       // Enable visibility filtering.
 Debug                        0       // Temporary startup/map diagnostic breadcrumbs.
+FilterTeammates              0       // Apply visibility filtering to teammates in team modes.
 SmokeOcclusion               1       // Enable smoke checks.
 AutoUpdate                   1       // Install verified GitHub releases, activated on server restart.
 VisibleGraceTicks            20      // Visibility hold.
-BoundsPadding                28      // Wall sample padding.
+BoundsPadding                32      // Wall sample padding.
 CornerPrediction             1       // Bounded, wall-clipped viewer input/velocity prediction.
 CornerPredictionSeconds      0.1     // Viewer horizon, 0..0.2 seconds.
 CornerMaxDistance            32      // Maximum viewer lead, 0..64 units.
