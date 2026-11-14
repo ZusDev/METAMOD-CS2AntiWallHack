@@ -132,6 +132,7 @@ bool AntiWallHack::Load( PluginId id, ISmmAPI* ismm, char* error, size_t maxlen,
         RemoveEventHook();
         transmitHook.reset();
         traceHook.reset();
+        RestoreConvars();
 
         META_CONPRINTF( "[AntiWallHack] Startup rejected: %s\n", ex.what() );
         ismm->Format( error, maxlen, "AntiWallHack: %s", ex.what() );
@@ -172,14 +173,7 @@ bool AntiWallHack::Unload( char*, size_t )
     smokeExplosions.Reset();
     transmitHook.reset();
     traceHook.reset();
-    ConVarRefAbstract cvar( "sv_enable_donttransmit" );
-
-    if ( convarChanged && cvar.IsValidRef() && !cvar.GetBool() )
-    {
-        cvar.SetString( previousConvar.c_str() );
-    }
-
-    convarChanged = false;
+    RestoreConvars();
     visibility = {};
     visMapName.clear();
     traceManager = nullptr;
@@ -218,7 +212,7 @@ const char* AntiWallHack::GetLicense()
 
 const char* AntiWallHack::GetVersion()
 {
-    return "1.0.9";
+    return "1.0.10";
 }
 
 const char* AntiWallHack::GetDate()
