@@ -299,6 +299,58 @@ namespace awh::updates
         }
     }
 
+    static std::string SettingName( const std::string& line )
+    {
+        std::istringstream tokens( line );
+        std::string name;
+        tokens >> std::ws;
+
+        if ( tokens.peek() != '/' && tokens.peek() != '#' )
+        {
+            tokens >> std::quoted( name );
+        }
+
+        return name;
+    }
+
+    // keeps the server's cfg and adds the settings from the release cfg that it doesn't have yet
+    static bool AddNewSettings( const fs::path& current, const fs::path& release )
+    {
+        std::string merged = ReadText( current ), line;
+        std::istringstream existing( merged ), incoming( ReadText( release ) );
+        std::set<std::string> names{ "" };
+
+        while ( std::getline( existing, line ) )
+        {
+            names.insert( SettingName( line ) );
+        }
+
+        if ( !merged.empty() && merged.back() != '\n' )
+        {
+            merged += '\n';
+        }
+
+        const size_t size = merged.size();
+
+        while ( std::getline( incoming, line ) )
+        {
+            if ( names.insert( SettingName( line ) ).second )
+            {
+                merged += line + '\n';
+            }
+        }
+
+        std::ofstream file( release, std::ios::binary | std::ios::trunc );
+        file << merged;
+
+        if ( !file.flush() )
+        {
+            throw std::runtime_error( "Cannot write update staging file" );
+        }
+
+        return merged.size() != size;
+    }
+
     static std::vector<std::string> Curl( const std::string& url, size_t limit )
     {
         return { "curl",
@@ -391,8 +443,6 @@ namespace awh::updates
             Unzip( releaseZip, GamedataEntry, gamedata, 1024 * 1024 );
             Unzip( releaseZip, VdfEntry, vdf, 65536 );
             Unzip( releaseZip, ConfigEntry, config, 65536 );
-            std::ifstream configInput( config );
-            ParseConfig( configInput );
             ValidateBinary( binary );
             std::ifstream gamedataInput( gamedata );
             auto parsed = ParseGamedata( gamedataInput );
@@ -402,7 +452,7 @@ namespace awh::updates
             const fs::path targetGamedata = plugin / "gamedata.txt";
             std::vector<std::pair<fs::path, fs::path>> files{ { gamedata, targetGamedata }, { vdf, gamePath / VdfEntry } };
 
-            if ( !fs::exists( gamePath / ConfigEntry ) )
+            if ( !fs::exists( gamePath / ConfigEntry ) || AddNewSettings( gamePath / ConfigEntry, config ) )
             {
                 files.emplace_back( config, gamePath / ConfigEntry );
             }
